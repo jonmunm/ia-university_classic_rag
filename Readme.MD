@@ -12,20 +12,20 @@ Translating natural language into SQL over complex relational schemas often fail
 
 This project solves that gap by combining:
 
-1. **🧠 Semantic Business Layer Retrieval (RAG):** Domain-specific business rules (`src/chunking/layer.md`) are chunked by Markdown headers, embedded, and stored in **Pinecone**, injecting precise domain context alongside the PostgreSQL DDL schema at inference time.
-2. **🛡️ Multi-Layered Evaluation Architecture:** Instead of relying on simple string matching, generated SQL queries are rigorously validated across three dimensions:
-   * **🔒 AST Safety & Read-Only Structure (`sqlglot`):** Ensures zero DDL/DML side effects and syntactic validity.
-   * **⚖️ Logical Equivalence (`Ragas AspectCritic`):** Evaluates semantic alignment while tolerating valid SQL syntactic variations (e.g., CTEs vs. flat JOINs).
-   * **📊 Empirical Execution Accuracy (`asyncpg` + `pandas`):** Executes both the ground-truth SQL and generated SQL inside isolated database transactions with forced rollbacks to verify 100% data equivalence.
+1. **Semantic Business Layer Retrieval (RAG):** Domain-specific business rules (`src/chunking/layer.md`) are chunked by Markdown headers, embedded, and stored in **Pinecone**, injecting precise domain context alongside the PostgreSQL DDL schema at inference time.
+2. **Multi-Layered Evaluation Architecture:** Instead of relying on simple string matching, generated SQL queries are rigorously validated across three dimensions:
+   * **AST Safety & Read-Only Structure (`sqlglot`):** Ensures zero DDL/DML side effects and syntactic validity.
+   * **Logical Equivalence (`Ragas AspectCritic`):** Evaluates semantic alignment while tolerating valid SQL syntactic variations (e.g., CTEs vs. flat JOINs).
+   * **Empirical Execution Accuracy (`asyncpg` + `pandas`):** Executes both the ground-truth SQL and generated SQL inside isolated database transactions with forced rollbacks to verify 100% data equivalence.
 
 ### 🗄️ 1.2. Database Domain Schema
 
 The service operates over a 14-table relational PostgreSQL 16 database (`university`):
 
-* **🏛️ Core Entities:** `alumno`, `carrera`, `asignatura`, `semestre`
-* **📝 Enrollments & Academic Records:** `inscripcion_carrera`, `inscripcion_asignatura`, `matricula_semestral`, `practica_profesional`
-* **🕓 Audit & History Tracking:** `historial_inscripcion_carrera`, `historial_practica_profesional`
-* **🏷️ Status Catalogs:** `estado_carrera`, `estado_asignatura`, `estado_practica`, `estado_financiero`
+* **Core Entities:** `alumno`, `carrera`, `asignatura`, `semestre`
+* **Enrollments & Academic Records:** `inscripcion_carrera`, `inscripcion_asignatura`, `matricula_semestral`, `practica_profesional`
+* **Audit & History Tracking:** `historial_inscripcion_carrera`, `historial_practica_profesional`
+* **Status Catalogs:** `estado_carrera`, `estado_asignatura`, `estado_practica`, `estado_financiero`
 
 ---
 
@@ -84,20 +84,20 @@ This file is automatically loaded by `infra/docker-compose.yaml` via the `env_fi
 
 | Variable | Description | Example / Default |
 | :--- | :--- | :--- |
-| **🔭 LangSmith (Observability & Tracing)** | | |
+| **LangSmith (Observability & Tracing)** | | |
 | `LANGSMITH_TRACING_V2` | Enables LangSmith tracing for LangChain executions. | `true` |
 | `LANGSMITH_ENDPOINT` | LangSmith API endpoint URL. | `https://api.smith.langchain.com` |
 | `LANGSMITH_PROJECT` | Target project name in the LangSmith dashboard. | `Project_LLM_Gen_dev` |
 | `LANGSMITH_API_KEY` | Authentication API key for LangSmith. | `lsv2_pt_...` |
-| **🤖 External AI & Vector DB Providers** | | |
+| **External AI & Vector DB Providers** | | |
 | `OPENAI_API_KEY` | OpenAI API key for embeddings, SQL generation, and LLM judge. | `sk-proj-...` |
 | `PINECONE_API_KEY` | Pinecone API key for retrieving business logic context. | `pcsk_...` |
 | `BUSSINES_INDEX_NAME` | Name of the Pinecone index storing the semantic business layer. | `bussines-index` |
-| **🧠 Model Configuration** | | |
+| **Model Configuration** | | |
 | `EMBEDDING_MODEL` | OpenAI embedding model used for vectorizing business rules and queries. | `text-embedding-3-small` |
 | `MAIN_MODEL_NAME` | Primary OpenAI model used by `LLMSqlGeneratorService` to generate SQL. | `gpt-4o` |
 | `TEST_MODEL_NAME` | Judge LLM used by Ragas (`AspectCritic`) during test evaluation. | `gpt-4o-mini` |
-| **🐘 PostgreSQL Database Connection** | | |
+| **PostgreSQL Database Connection** | | |
 | `POSTGRES_HOST` | Hostname and container name of the PostgreSQL service in Docker. | `database` |
 | `POSTGRES_USER` | PostgreSQL username. | `user` |
 | `POSTGRES_PASSWORD` | PostgreSQL password. | `******` |
@@ -146,14 +146,14 @@ To bridge the gap between user intent and the physical PostgreSQL schema, the pr
 
 The `chunker.py` module automates the end-to-end lifecycle of parsing `layer.md`, generating embeddings, and indexing them in Pinecone:
 
-1. **🔄 Idempotent Pinecone Index Provisioning:**
+1. **Idempotent Pinecone Index Provisioning:**
    * Connects to Pinecone using `PINECONE_API_KEY` and checks if the target index (`BUSSINES_INDEX_NAME`, e.g., `bussines-index`) already exists.
    * If present, it deletes the existing index and polls until deletion is confirmed to prevent stale chunks.
    * Creates a fresh **Serverless Index** (`dimension=1536`, `metric="cosine"`, AWS `us-east-1`) and waits until the index status reports `ready`.
-2. **✂️ Header-Aware Markdown Splitting:**
+2. **Header-Aware Markdown Splitting:**
    * Reads `src/chunking/layer.md` and splits the text using LangChain's `MarkdownHeaderTextSplitter` configured on level-2 headers (`headers_to_split_on=[("##", "Seccion")]`, with `strip_headers=False`).
    * Preserving the `##` header inside each chunk ensures that every vector retains its full topical context and metadata (`Seccion`).
-3. **🧬 Embedding & Vector Store Upload:**
+3. **Embedding & Vector Store Upload:**
    * Embeds each Markdown section using `OpenAIEmbeddings` (`EMBEDDING_MODEL`, i.e., `text-embedding-3-small`, which outputs 1536-dimensional vectors).
    * Assigns deterministic document IDs (`chunk_0`, `chunk_1`, ..., `chunk_N`) and uploads them to Pinecone via `PineconeVectorStore.from_documents()`.
 
@@ -173,15 +173,15 @@ All containerization and orchestration files reside in the `infra/` folder and u
 
 ### 🧱 5.1. Infrastructure Components
 
-1. **🐘 PostgreSQL Database (`infra/pg.Dockerfile`):**
+1. **PostgreSQL Database (`infra/pg.Dockerfile`):**
    * Based on `postgres:16`.
    * Automatically initializes the database schema and seed data on first startup by copying `./src/schema/schema.sql` (`01-schema.sql`) and `./src/schema/data.sql` (`02-data.sql`) into `/docker-entrypoint-initdb.d/`.
    * Exposes port `5432` and persists data in the `postgres_data` Docker volume.
-2. **🐍 FastAPI Application (`infra/app.Dockerfile`):**
+2. **FastAPI Application (`infra/app.Dockerfile`):**
    * Based on `python:3.11` with working directory `/app`.
    * Installs dependencies from `requirements.txt`.
    * Mounts the root repository (`..:/app`) for live hot-reloading (`--reload`) and exposes internal port `8000` mapped to host port `8001`.
-3. **🎼 Orchestration (`infra/docker-compose.yaml`):**
+3. **Orchestration (`infra/docker-compose.yaml`):**
    * Defines project name `university` with two services: `postgres-db` (container name resolved dynamically from `${POSTGRES_HOST}`, i.e., `database`) and `python-app` (container name `python_env`).
 
 ### 🚀 5.2. Building and Starting the Stack
@@ -216,11 +216,85 @@ docker exec -it python_env /bin/bash
 
 ---
 
-## 🧪 6. Running the Evaluation Suite (`pytest`)
+## 🌐 6. API Usage & `curl` Examples
+
+Once the Docker Compose stack is up and running, the FastAPI service listens on host port `8001` (`http://localhost:8001`). You can explore the interactive OpenAPI documentation at `http://localhost:8001/docs` or query the REST API directly using `curl`.
+
+### ✅ 6.1. Generate a SQL Query from Natural Language (Success Case)
+
+Send a `POST` request with your natural language question in the JSON body. The service retrieves the relevant business rules from Pinecone, combines them with the PostgreSQL schema, and returns the generated SQL query:
+
+```bash
+curl -X POST "http://localhost:8001/v1/sqlgen" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Dame los nombres y apellidos de los alumnos de la carrera de Ingeniería Civil Informática que en 2019-1 se encuentran con un estado financiero moroso, pero que mantienen su carrera activa."
+  }'
+```
+
+**Expected JSON Response:**
+
+```json
+{
+  "sql_query": "SELECT a.nombres, a.apellidos FROM alumno a JOIN estado_financiero ef ON a.estado_financiero_id = ef.id JOIN inscripcion_carrera ic ON a.id = ic.alumno_id JOIN carrera c ON ic.carrera_id = c.id JOIN estado_carrera ec ON ic.estado_carrera_id = ec.id JOIN matricula_semestral ms ON ic.id = ms.inscripcion_carrera_id JOIN semestre s ON ms.semestre_id = s.id WHERE ef.nombre = 'Moroso' AND ec.nombre = 'Activa' AND s.codigo = '2019-1' AND c.nombre ILIKE '%Ingeniería Civil Informática%';",
+  "is_error": false,
+  "error_message": null
+}
+```
+
+### 📊 6.2. Complex Aggregation & Business Rule Query (`curl` Example)
+
+Query involving returning students (*"alumnos antiguos"*) and minimum attendance failure rules:
+
+```bash
+curl -X POST "http://localhost:8001/v1/sqlgen" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Necesito el conteo de alumnos antiguos de Enfermería que reprobaron la asignatura de Anatomía Macroscópica durante el semestre 2020-1 específicamente por no cumplir con el porcentaje mínimo de asistencia requerido."
+  }'
+```
+
+**Expected JSON Response:**
+
+```json
+{
+  "sql_query": "SELECT COUNT(DISTINCT a.id) AS cantidad_alumnos_reprobados FROM alumno a JOIN inscripcion_carrera ic ON a.id = ic.alumno_id JOIN carrera c ON ic.carrera_id = c.id JOIN inscripcion_asignatura ia ON ic.id = ia.inscripcion_carrera_id JOIN asignatura asg ON ia.asignatura_id = asg.id JOIN estado_asignatura ea ON ia.estado_asignatura_id = ea.id JOIN matricula_semestral ms ON ic.id = ms.inscripcion_carrera_id AND ia.semestre_id = ms.semestre_id JOIN semestre s ON ms.semestre_id = s.id WHERE c.nombre ILIKE '%Enfermería%' AND asg.nombre ILIKE '%Anatomía Macroscópica%' AND s.codigo = '2020-1' AND ic.semestre_ingreso_id < ms.semestre_id AND ia.porcentaje_asistencia < 75 AND ea.nombre = 'Reprobada';",
+  "is_error": false,
+  "error_message": null
+}
+```
+
+### ⚠️ 6.3. Out-of-Domain or Unanswerable Query (Error Handling Case)
+
+When a user submits a prompt unrelated to the university database schema or requests unsupported operations, the service flags `is_error: true` and returns a descriptive explanation instead of hallucinating invalid SQL:
+
+```bash
+curl -X POST "http://localhost:8001/v1/sqlgen" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "¿Cuál es el pronóstico del clima en Santiago para mañana?"
+  }'
+```
+
+**Expected JSON Response:**
+
+```json
+{
+  "sql_query": null,
+  "is_error": true,
+  "error_message": "La consulta no está relacionada con el esquema de base de datos académico de la universidad."
+}
+```
+
+*(Note: If you are running `curl` from inside the `python_env` container rather than your host machine, use `http://localhost:8000/...` instead of port `8001`. Adjust the endpoint path if your router prefix in `src/api/routes.py` differs).*
+
+---
+
+## 🧪 7. Running the Evaluation Suite (`pytest`)
 
 Inside the `python_env` container (`/app`), the test suite is configured to output clean, single-line status summaries per test case in the console (`INFO` level) while writing full diagnostic details (prompts, expected SQL, generated SQL, and DataFrame diffs) to timestamped log files under `logs/{test_name}_{YYYY_MM_DD_HH_MM_SS}.log` (`DEBUG` level).
 
-### 🔒 6.1. AST Safety & Structure Test (Threshold: `1.00`)
+### 🔒 7.1. AST Safety & Structure Test (Threshold: `1.00`)
 
 Validates that all generated queries are syntactically valid PostgreSQL `SELECT` / set operations and contain zero forbidden DDL/DML commands (`DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, etc.):
 
@@ -228,7 +302,7 @@ Validates that all generated queries are syntactically valid PostgreSQL `SELECT`
 pytest -s tests/test_sql_safety.py
 ```
 
-### ⚖️ 6.2. Semantic & Logical Equivalence Test (Threshold: `>= 0.70`)
+### ⚖️ 7.2. Semantic & Logical Equivalence Test (Threshold: `>= 0.70`)
 
 Uses Ragas `AspectCritic` (`gpt-4o-mini`) to verify that the generated query is logically equivalent to the ground truth according to the schema and retrieved business rules:
 
@@ -236,7 +310,7 @@ Uses Ragas `AspectCritic` (`gpt-4o-mini`) to verify that the generated query is 
 pytest -s tests/test_aspect_critic.py
 ```
 
-### 📊 6.3. Empirical Execution Accuracy Test (Threshold: `1.00`)
+### 📊 7.3. Empirical Execution Accuracy Test (Threshold: `1.00`)
 
 Executes both the ground-truth query and the generated query inside isolated PostgreSQL transactions (with automatic rollback) and compares the resulting datasets using `pandas.testing.assert_frame_equal`:
 
@@ -244,7 +318,7 @@ Executes both the ground-truth query and the generated query inside isolated Pos
 pytest -s tests/test_data_compy_score.py
 ```
 
-### 🏁 6.4. Run All Evaluation Suites
+### 🏁 7.4. Run All Evaluation Suites
 
 ```bash
 pytest -s tests/
