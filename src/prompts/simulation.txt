@@ -1,0 +1,26 @@
+Quiero que me generes un archivo llamado data.sql, que contenga datos y haga inserciones en el orden respectivo para respetar las relaciones de integridad referencial. Genera los datos de las inscripciones registro por registro (una fila por cada cursada de un alumno). Está estrictamente prohibido agrupar, resumir o poner comentarios tipo "alumnos del 1 al 20"; necesito el script SQL completo con cada `INSERT` individual.
+
+Consideremos:
+
+* 5 carreras, cada una con una duración de 5 años. Usa:
+    - Ingeniería Civil Informática
+    - Enfermería
+    - Derecho
+    - Psicología
+    - Arquitectura
+* Cada carrera debe tener entre 50 a 55 ramos en total. Esto conlleva a 5 o 6 ramos por semestre por carrera. Tú decides la distribución. Para esto considera semestres partiendo el 2018-1 hasta el 2022-2 (5 años debido a la duración de las carreras).
+* Dinámica de estudiantes (Cohortes): Ingresan 30 alumnos nuevos por año a cada carrera (siempre en el primer semestre del año). 
+* Lógica de aprobación, recursamiento y asistencia:
+    - Primer Intento: De los alumnos que inscriben una asignatura por primera vez, aplica una probabilidad aproximada para su estado: 40% la aprueban, 30% la reprueban, 25% la renuncian y 5% la convalidan.
+    - Recursamiento (Segundo Intento): Los alumnos que reprueban deben generar un nuevo registro cursando la misma asignatura en el semestre siguiente que se imparta el ramo, atrasando su avance en la malla. Aplica esta probabilidad: 40% aprueba, 30% vuelve a reprobar y 30% renuncia.
+    - Tercer Intento (Última Oportunidad): Los que reprueban por segunda vez deben inscribir el ramo por tercera vez. Aplica esta probabilidad: 40% aprueba, 40% reprueba definitivamente y 20% renuncia.
+    - Regla de Inasistencia (RI): De todos los registros que resulten en estado "Reprobada" (ya sea en primer, segundo o tercer intento), fuerza que al menos el 60% de esos casos tenga un porcentaje de asistencia menor a 75% (aleatorio entre 40% y 74%) para asegurar un volumen razonable de reprobados por inasistencia.
+    - Todo alumno reprobado debe tener inserciones en la tabla `historial_inscripcion_asignatura` con la justificación o fecha de cambio.
+* Causal de Eliminación (Pérdida de Carrera): 
+    - Si un alumno reprueba en su **tercer intento**, su estado de carrera debe cambiar inmediatamente a "En Pérdida".
+    - En total debe haber exactamente 40 alumnos con pérdida de carrera en todo el script. Asegúrate de que una gran parte de estos 40 alumnos caigan en esta condición justamente por reprobar su tercer intento. El resto puede perderla por abandono u otros motivos.
+    - Estas pérdidas deben verse reflejadas en `historial_inscripcion_carrera` (usando motivos como "Reprobación en tercer intento"). Una vez que pierden la carrera o renuncian, está estrictamente prohibido generarles nuevas inscripciones de asignaturas o prácticas en semestres futuros.
+* Respecto de la práctica profesional:
+    - Genera datos de práctica solo cuando los alumnos hayan llegado cronológicamente al 8vo semestre de su malla (considerando sus atrasos reales por recursamiento).
+    - El 70% de los alumnos que hicieron práctica la aprobaron, y el 30% la reprobó. Ese 30% debe tener inserciones detalladas en la tabla de historial de prácticas.
+* Usa datos lo más reales posibles. No le des a las asignaturas ningún prefijo que haga referencia a su nivel o semestre (por ejemplo, 'Seguridad Informática II - Nivel 4' en el 4to semestre debería ser solo 'Seguridad Informática II'). Usa empresas reales para las prácticas profesionales, y nombres de personas latinos/reales para el supervisor y para el docente.
