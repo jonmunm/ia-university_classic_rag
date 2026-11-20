@@ -1,24 +1,62 @@
-name: university
+name: ia_university_classic_rag
 
 services:
   postgres-db:
     build:
       context: ..
       dockerfile: infra/pg.Dockerfile
-    container_name: ${POSTGRES_HOST}
-    env_file:
-      - .env
+    container_name: ${OLTP_STORE_HOST}
+    environment:
+      - POSTGRES_USER=${OLTP_STORE_USER}
+      - POSTGRES_PASSWORD=${OLTP_STORE_PASSWORD}
+      - POSTGRES_DB=${OLTP_STORE_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
-  python-app:
+  pgvector-db:
+    image: pgvector/pgvector:pg16
+    container_name: ${VECTOR_STORE_HOST}
+    environment:
+      - POSTGRES_USER=${VECTOR_STORE_USER}
+      - POSTGRES_PASSWORD=${VECTOR_STORE_PASSWORD}
+      - POSTGRES_DB=${VECTOR_STORE_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VECTOR_STORE_USER} -d ${VECTOR_STORE_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  vector-store-init:
+    image: ia-university-app:latest
     build:
       context: ..
       dockerfile: infra/app.Dockerfile
-    container_name: python_env
+    container_name: vector_store_init
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - ..:/app
+    command: python -m src.chunking.chunker
+    depends_on:
+      pgvector-db:
+        condition: service_healthy
+    restart: "no"
+
+  ia-endpoint:
+    image: ia-university-app:latest
+    build:
+      context: ..
+      dockerfile: infra/app.Dockerfile
+    container_name: ia_endpoint
     working_dir: /app
     env_file:
       - .env
@@ -28,7 +66,30 @@ services:
       - "8001:8000"
     command: uvicorn src.api.routes:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
-      - postgres-db
+      postgres-db:
+        condition: service_started
+      pgvector-db:
+        condition: service_healthy
+      vector-store-init:
+        condition: service_completed_successfully
+      observability:
+        condition: service_started
+
+  observability:
+    image: arizephoenix/phoenix:latest
+    container_name: observability
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+      - PHOENIX_ENABLE_AUTH=false
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - phoenix_data:/mnt/data
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  pgvector_data:
+  phoenix_data:

@@ -1,30 +1,23 @@
-import os
 import pytest
 import asyncpg
 import pandas as pd
 from tests.fixtures import FIXTURES
 from tests.conftest import get_test_logger
 from src.llm.llm_sql_generator_service import LLMSqlGeneratorService
+from src.utils import get_env
 
 logger = get_test_logger(__file__)
 
-POSTGRES_USER = os.getenv("POSTGRES_USER", None)
-if not POSTGRES_USER:
-    raise ValueError("POSTGRES_USER must be specified")
+OLTP_STORE_USER = get_env("OLTP_STORE_USER")
+OLTP_STORE_PASSWORD = get_env("OLTP_STORE_PASSWORD")
+OLTP_STORE_DB = get_env("OLTP_STORE_DB")
+OLTP_STORE_HOST = get_env("OLTP_STORE_HOST")
+OLTP_STORE_PORT = get_env("OLTP_STORE_PORT")
 
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", None)
-if not POSTGRES_PASSWORD:
-    raise ValueError("POSTGRES_PASSWORD must be specified")
-
-POSTGRES_DB = os.getenv("POSTGRES_DB", None)
-if not POSTGRES_DB:
-    raise ValueError("POSTGRES_DB must be specified")
-
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", None)
-if not POSTGRES_HOST:
-    raise ValueError("POSTGRES_HOST must be specified")
-
-DB_DSN = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:5432/{POSTGRES_DB}"
+DB_DSN = (
+    f"postgresql://{OLTP_STORE_USER}:{OLTP_STORE_PASSWORD}"
+    f"@{OLTP_STORE_HOST}:{OLTP_STORE_PORT}/{OLTP_STORE_DB}"
+)
 
 
 @pytest.mark.asyncio

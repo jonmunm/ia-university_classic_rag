@@ -82,9 +82,6 @@ def validate_safe_select(sql: str) -> None:
     if any(tree.find(f) for f in forbidden):
         raise ValueError("DML/DDL operations are strictly forbidden.")
 
-from langchain_core.documents import Document
-
-
 def format_docs(docs: list[Document]) -> str:
     """
     Concatenate the text content of retrieved documents into a single string.
