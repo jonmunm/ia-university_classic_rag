@@ -1,73 +1,79 @@
 """
-Utility functions and shared resources for loading database schema files, 
-environment configurations, and initializing the LangSmith tracking client.
+Utility functions and shared resources for loading database schema files,
+environment configurations, and reporting observability metrics to LangSmith.
 """
 
 import os
-from uuid import UUID
+from functools import lru_cache
 from pathlib import Path
+from uuid import UUID
+
 from langsmith import Client
 from langsmith.schemas import Feedback
 
-# Resolve the base directory of the current module and the default SQL schema path
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_PATH = BASE_DIR / "schema" / "schema.sql"
 
 
-def get_schema(file_path: Path | str = DEFAULT_PATH) -> str:
+def get_env(name: str) -> str:
     """
-    Read and return the contents of a SQL schema file.
+    Retrieve a required environment variable by name.
 
     Args:
-        file_path (Path | str): Path to the SQL schema file. Defaults to DEFAULT_PATH.
+        name (str): The name of the environment variable to look up.
 
     Returns:
-        str: The raw SQL schema definition as a string.
+        str: The non-empty value of the environment variable.
+
+    Raises:
+        ValueError: If the environment variable is not set or is empty.
     """
+    env = os.getenv(name)
+    if not env:
+        raise ValueError(f"{name} must be specified")
+
+    return env
+
+
+def get_schema(file_path: Path | str = DEFAULT_PATH) -> str:
+    """Read and return the contents of a SQL schema file."""
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
 
-def get_langsmith_project_name() -> str:
-    """
-    Retrieve the LangSmith project name from the environment variables.
-
-    Returns:
-        str: The configured LangSmith project name.
-
-    Raises:
-        ValueError: If the 'LANGSMITH_PROJECT' environment variable is missing or empty.
-    """
-    langsmith_project_name = os.getenv("LANGSMITH_PROJECT", None)
-    if not langsmith_project_name:
-        raise ValueError("A valid Langsmith project is required")
-
-    return langsmith_project_name
+def get_observability_project_name() -> str:
+    """Retrieve the observability project name from environment variables."""
+    return get_env("OBSERVABILITY_PROJECT_NAME")
 
 
-# Initialize the LangSmith client and ensure the target project exists (create or retrieve UUID)
-client = Client()
-PROJECT_UUID = client.create_project(
-    project_name=get_langsmith_project_name(), 
-    upsert=True
-).id
+@lru_cache(maxsize=1)
+def _get_observability_client() -> Client:
+    """Return a cached LangSmith client configured from OBSERVABILITY_* variables."""
+    return Client(
+        api_url=get_env("OBSERVABILITY_ENDPOINT"),
+        api_key=get_env("OBSERVABILITY_API_KEY"),
+    )
+
+
+@lru_cache(maxsize=1)
+def _get_project_uuid() -> UUID:
+    """Ensure the target observability project exists and cache its UUID."""
+    return (
+        _get_observability_client()
+        .create_project(
+            project_name=get_observability_project_name(),
+            upsert=True,
+        )
+        .id
+    )
+
 
 def report_metric(run_id: UUID | str, key: str, score: float | int) -> Feedback:
-    """
-    Log a feedback metric or latency score to LangSmith for a specific trace run.
-
-    Args:
-        run_id (UUID | str): The unique identifier of the LangSmith run/trace.
-        key (str): The name of the feedback metric (e.g., latency or evaluation key).
-        score (float | int): The numerical value or duration to record.
-
-    Returns:
-        Feedback: The created LangSmith Feedback object.
-    """
-    return client.create_feedback(
+    """Log a feedback metric or latency score to LangSmith for a specific trace run."""
+    return _get_observability_client().create_feedback(
         run_id=run_id,
         key=key,
         score=score,
-        session_id=PROJECT_UUID,
-        trace_id=run_id
+        session_id=_get_project_uuid(),
+        trace_id=run_id,
     )

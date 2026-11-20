@@ -1,58 +1,46 @@
-import os
-import time
 import asyncio
-from src.utils import get_langsmith_project_name
-from src.utils import report_metric
-from src.prompts.prompts import STATIC_SYSTEM_PROMPT
-from src.prompts.prompts import get_messages_prompt
-from src.llm.utils import LLMSqlGeneratorSchema
-from src.llm.utils import LLMSqlGeneratorServiceResponse
-from src.llm.utils import validate_safe_select
-from src.llm.utils import format_docs
+import time
+from langchain_openai import ChatOpenAI
 from langsmith import traceable
 from langsmith.run_helpers import get_current_run_tree
-from langchain_openai import OpenAIEmbeddings
-from langchain_pinecone import PineconeVectorStore
-from langchain_openai import ChatOpenAI
+from src.llm.utils import (
+    LLMSqlGeneratorSchema,
+    LLMSqlGeneratorServiceResponse,
+    format_docs,
+    validate_safe_select,
+)
+from src.prompts.prompts import get_messages_prompt
+from src.retriever import VectorRetriever
+from src.utils import get_env, get_observability_project_name, report_metric
 
-BUSSINES_INDEX_NAME = os.getenv("BUSSINES_INDEX_NAME", None)
-if not BUSSINES_INDEX_NAME:
-    raise ValueError("BUSSINES_INDEX_NAME must be specified")
-
-MAIN_MODEL_NAME = os.getenv("MAIN_MODEL_NAME", None)
-if not MAIN_MODEL_NAME:
-    raise ValueError("MAIN_MODEL_NAME must be specified")
+MAIN_MODEL_NAME = get_env("MAIN_MODEL_NAME")
 
 llm = ChatOpenAI(model=MAIN_MODEL_NAME, temperature=0)
 structured_llm = llm.with_structured_output(LLMSqlGeneratorSchema, include_raw=True)
 
-embeddings = OpenAIEmbeddings()
-
-main_vector_store = PineconeVectorStore(
-    embedding=embeddings,
-    index_name=BUSSINES_INDEX_NAME
-)
-main_retriever = main_vector_store.as_retriever(search_kwargs={"k": 10})
 
 class LLMSqlGeneratorService:
+    def __init__(self, retriever: VectorRetriever | None = None) -> None:
+        self._retriever = retriever or VectorRetriever()
+
+    @traceable(name="3_SQL_Validation", project_name=get_observability_project_name())
     def _validate_safe_select(self, sql: str) -> None:
         validate_safe_select(sql)
 
-    @traceable(name="LLMSqlGeneratorService.invoke", project_name=get_langsmith_project_name())
+    @traceable(name="LLMSqlGeneratorService.invoke", project_name=get_observability_project_name())
     async def invoke(self, inputs: dict) -> LLMSqlGeneratorServiceResponse:
-
         run_id = get_current_run_tree().id
         query = inputs["query"]
 
         t0 = time.perf_counter()
-        docs = await main_retriever.ainvoke(query, config={"run_name" : "1_Retrieval"})
+        docs = await self._retriever.retrieve(query)
         t_service_retrieval = time.perf_counter() - t0
         asyncio.create_task(
             asyncio.to_thread(
                 report_metric,
                 run_id=run_id,
                 key="service_retrieval_duration",
-                score=t_service_retrieval
+                score=t_service_retrieval,
             )
         )
 
@@ -60,16 +48,16 @@ class LLMSqlGeneratorService:
         messages = get_messages_prompt(context, query)
 
         t0 = time.perf_counter()
-        out = await structured_llm.ainvoke(messages, config={"run_name" : "2_Generation"})
+        out = await structured_llm.ainvoke(messages, config={"run_name": "2_Generation"})
         t_service_duration = time.perf_counter() - t0
         asyncio.create_task(
             asyncio.to_thread(
                 report_metric,
                 run_id=run_id,
                 key="service_generation_duration",
-                score=t_service_duration
+                score=t_service_duration,
             )
-        )        
+        )
 
         result = out["parsed"]
 
@@ -95,8 +83,8 @@ class LLMSqlGeneratorService:
                 report_metric,
                 run_id=run_id,
                 key="sql_validation_duration",
-                score=t_sql_validation
+                score=t_sql_validation,
             )
-        )          
+        )
 
         return LLMSqlGeneratorServiceResponse(parsed=result, contexts=docs)

@@ -1,4 +1,3 @@
-import os
 import pytest
 from openai import AsyncOpenAI
 from ragas.llms import llm_factory
@@ -7,15 +6,12 @@ from ragas.metrics import AspectCritic
 
 from tests.fixtures import FIXTURES
 from tests.conftest import get_test_logger
-from src.utils import get_schema
+from src.utils import get_env, get_schema
 from src.llm.llm_sql_generator_service import LLMSqlGeneratorService
 
 logger = get_test_logger(__file__)
 
-TEST_MODEL_NAME = os.getenv("TEST_MODEL_NAME", None)
-if not TEST_MODEL_NAME:
-    raise ValueError("TEST_MODEL_NAME must be specified")
-
+TEST_MODEL_NAME = get_env("TEST_MODEL_NAME")
 
 @pytest.mark.asyncio
 async def test_sql_generator_aspect_critic():

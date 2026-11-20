@@ -4,14 +4,14 @@ from fastapi import FastAPI
 from fastapi import HTTPException
 from langsmith import traceable
 from langsmith.run_helpers import get_current_run_tree
-from src.utils import get_langsmith_project_name
+from src.utils import get_observability_project_name
 from src.utils import report_metric
 from src.llm.llm_sql_generator_service import LLMSqlGeneratorService
 from src.api.utils import SqlGenerationBodyResponse
 
 app = FastAPI()
 
-@traceable(name="SQL_Generation", project_name=get_langsmith_project_name())
+@traceable(name="SQL_Generation", project_name=get_observability_project_name())
 async def _generate_sql(body: SqlGenerationBodyResponse):
 
     run_id = get_current_run_tree().id

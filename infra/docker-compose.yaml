@@ -1,34 +1,65 @@
-name: university
+name: ia_university_classic_rag
 
 services:
   postgres-db:
     build:
       context: ..
       dockerfile: infra/pg.Dockerfile
-    container_name: ${POSTGRES_HOST}
-    env_file:
-      - .env
+    container_name: ${OLTP_STORE_HOST}
+    environment:
+      - POSTGRES_USER=${OLTP_STORE_USER}
+      - POSTGRES_PASSWORD=${OLTP_STORE_PASSWORD}
+      - POSTGRES_DB=${OLTP_STORE_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${OLTP_STORE_USER} -d ${OLTP_STORE_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
-  python-app:
+  vector-store-init:
+    image: ia-university-app:latest
     build:
       context: ..
       dockerfile: infra/app.Dockerfile
-    container_name: python_env
+    container_name: vector_store_init
     working_dir: /app
     env_file:
       - .env
+    volumes:
+      - ..:/app
+    command: python -m src.chunking.chunker
+    restart: "no"
+
+  ia-endpoint:
+    image: ia-university-app:latest
+    build:
+      context: ..
+      dockerfile: infra/app.Dockerfile
+    container_name: ia_endpoint
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      - PINECONE_API_KEY=${VECTOR_STORE_API_KEY}
+      - LANGSMITH_TRACING_V2=${OBSERVABILITY_ENABLED}
+      - LANGSMITH_ENDPOINT=${OBSERVABILITY_ENDPOINT}
+      - LANGSMITH_PROJECT=${OBSERVABILITY_PROJECT_NAME}
+      - LANGSMITH_API_KEY=${OBSERVABILITY_API_KEY}
     volumes:
       - ..:/app
     ports:
       - "8001:8000"
     command: uvicorn src.api.routes:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
-      - postgres-db
+      postgres-db:
+        condition: service_healthy
+      vector-store-init:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:

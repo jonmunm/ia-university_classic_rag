@@ -1,9 +1,8 @@
+from textwrap import dedent
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from src.utils import get_schema
-from langchain_core.messages import HumanMessage
-from langchain_core.messages import SystemMessage
-from langchain_core.messages import BaseMessage
 
-STATIC_SYSTEM_TEMPLATE = """
+STATIC_SYSTEM_TEMPLATE = dedent("""
     You are a strict PostgreSQL generation assistant for an education institution.
 
     ## RULES
@@ -24,41 +23,21 @@ STATIC_SYSTEM_TEMPLATE = """
     - FAILURE: Missing columns, ambiguous request, missing grain, or impossible to resolve without guessing. -> is_error=true, sql_query=null, error_message=<Actionable reason>.
 
     Do NOT guess columns or formulas. Searching catalog/dimensional text columns via ILIKE (per Rule 8) is valid and NOT considered guessing.
-"""
+""").strip()
 
-STATIC_SYSTEM_PROMPT = STATIC_SYSTEM_TEMPLATE.format(
-    schema=get_schema()
-)
+STATIC_SYSTEM_PROMPT = STATIC_SYSTEM_TEMPLATE.format(schema=get_schema())
+
 
 def get_messages_prompt(context: str, query: str) -> list[BaseMessage]:
-    """
-    Construct the system and human message payload for the LLM, 
-    including an ephemeral prompt cache breakpoint on the system prompt.
-
-    Args:
-        context (str): The formatted retrieved context documents.
-        query (str): The user's natural language question.
-
-    Returns:
-        list[BaseMessage]: The list of messages ready to be passed to the chat model.
-    """
+    """Construct the system and human message payload for the LLM."""
     return [
-        SystemMessage(content=[
-            {
-                "type": "text",
-                "text": STATIC_SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},  # <-- CACHE BREAKPOINT
-            },
-        ]),
-        HumanMessage(content=[
-            {
-                "type": "text",
-                "text": (
-                    "==== OTHER METADATA CONTEXT (retrieved, query-specific) ====\n"
-                    f"{context}\n\n"
-                    "==== USER REQUEST ====\n"
-                    f"Query: {query}"
-                ),
-            },
-        ]),
+        SystemMessage(content=STATIC_SYSTEM_PROMPT),
+        HumanMessage(
+            content=(
+                "==== OTHER METADATA CONTEXT (retrieved, query-specific) ====\n"
+                f"{context}\n\n"
+                "==== USER REQUEST ====\n"
+                f"Query: {query}"
+            )
+        ),
     ]
